@@ -1,0 +1,6 @@
+@Foll_Care_HostAddress = http://localhost:5245
+
+GET {{Foll_Care_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

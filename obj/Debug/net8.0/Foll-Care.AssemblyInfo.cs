@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("Foll-Care")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+ee86011fd712dc6f8483de7a74d1f0d87bb51bb5")]
 [assembly: System.Reflection.AssemblyProductAttribute("Foll-Care")]
 [assembly: System.Reflection.AssemblyTitleAttribute("Foll-Care")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

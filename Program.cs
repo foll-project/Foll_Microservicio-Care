@@ -1,4 +1,4 @@
-using foll_care.Care.Application.ACL;
+// ACL layer removed: endpoints moved to internal controllers
 using System.Text;
 using foll_care.Care.Application.Internal.CommandServices;
 using foll_care.Care.Application.Internal.QueryServices;
@@ -34,9 +34,9 @@ builder.Services.AddSwaggerGen(options =>
 {
     options.SwaggerDoc("v1", new OpenApiInfo
     {
-        Title = "Foll API",
+        Title = "Foll Care Microservice",
         Version = "v1",
-        Description = "API con arquitectura DDD y Bounded Contexts"
+        Description = "Microservicio de Foll : Care. Centralización de la gestión de adultos mayores."
     });
 
     options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
@@ -98,8 +98,8 @@ builder.Services.AddAuthorization();
 
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
-builder.Services.AddScoped<IPatientDeviceAcl, PatientDeviceAcl>();
-builder.Services.AddScoped<IPatientEmergencyAcl, PatientEmergencyAcl>();
+// Former ACL registrations removed. Access endpoints are exposed
+// via internal controllers and handled by IPatientQueryService.
 
 builder.Services.AddScoped<IPatientRepository, PatientRepository>();
 builder.Services.AddScoped<IPatientInvitationRepository, PatientInvitationRepository>();

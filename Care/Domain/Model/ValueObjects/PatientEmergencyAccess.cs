@@ -1,6 +1,8 @@
-namespace foll_care.Care.Application.ACL;
+using System.Collections.Generic;
 
-public record PatientEmergencyAccessDto(
+namespace foll_care.Care.Domain.Model.ValueObjects;
+
+public record PatientEmergencyAccess(
     long PatientId,
     long OfficialGuardianUserId,
     long? CurrentGuardianUserId,

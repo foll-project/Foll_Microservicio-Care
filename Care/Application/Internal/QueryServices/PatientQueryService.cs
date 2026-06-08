@@ -3,6 +3,7 @@ using foll_care.Care.Domain.Model.Queries;
 using foll_care.Care.Domain.Repositories;
 using foll_care.Care.Domain.Services;
 using foll_care.Care.Domain.Model.ValueObjects;
+using System.Linq;
 
 namespace foll_care.Care.Application.Internal.QueryServices;
 
@@ -81,6 +82,30 @@ public class PatientQueryService : IPatientQueryService
 
         EnsureUserLinkedToPatient(patient, query.ActorUserId);
         return invitation;
+    }
+
+    public async Task<PatientDeviceAccess?> Handle(GetPatientDeviceAccessQuery query)
+    {
+        if (query.PatientId <= 0) return null;
+
+        var patient = await _patientRepository.FindByIdAsync(query.PatientId);
+        if (patient is null) return null;
+
+        return new PatientDeviceAccess(patient.PatientId, patient.OfficialGuardianUserId);
+    }
+
+    public async Task<PatientEmergencyAccess?> Handle(GetPatientEmergencyAccessQuery query)
+    {
+        if (query.PatientId <= 0) return null;
+
+        var patient = await _patientRepository.FindByIdAsync(query.PatientId);
+        if (patient is null) return null;
+
+        return new PatientEmergencyAccess(
+            patient.PatientId,
+            patient.OfficialGuardianUserId,
+            patient.CurrentGuardianUserId,
+            patient.Caregivers.Select(c => c.UserId).ToArray());
     }
 
     private static void EnsureUserLinkedToPatient(Patient patient, long actorUserId)

@@ -243,6 +243,65 @@ namespace Foll_Care.Shared.Infrastructure.Persistence.EFC.Migrations
                         });
                 });
 
+            modelBuilder.Entity("foll_care.Care.Infrastructure.Messaging.Outbox.IntegrationOutboxMessage", b =>
+                {
+                    b.Property<Guid>("EventId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("event_id");
+
+                    b.Property<int>("AttemptCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("attempt_count");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("event_type");
+
+                    b.Property<string>("LastError")
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("last_error");
+
+                    b.Property<DateTime>("NextAttemptAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("next_attempt_at_utc");
+
+                    b.Property<DateTime>("OccurredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("occurred_at_utc");
+
+                    b.Property<Guid>("OperationId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("operation_id");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("payload");
+
+                    b.Property<DateTime?>("PublishedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("published_at_utc");
+
+                    b.Property<int>("Version")
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("EventId")
+                        .HasName("pk_integration_outbox_messages");
+
+                    b.HasIndex("NextAttemptAtUtc")
+                        .HasDatabaseName("ix_integration_outbox_messages_next_attempt_at_utc")
+                        .HasFilter("published_at_utc IS NULL");
+
+                    b.HasIndex("OperationId")
+                        .HasDatabaseName("ix_integration_outbox_messages_operation_id");
+
+                    b.ToTable("integration_outbox_messages", "care");
+                });
+
             modelBuilder.Entity("foll_care.Care.Domain.Model.Entities.EmergencyContact", b =>
                 {
                     b.HasOne("foll_care.Care.Domain.Model.Entities.Patient", null)

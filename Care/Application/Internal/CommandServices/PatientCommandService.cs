@@ -1,3 +1,5 @@
+using foll_care.Care.Application.IntegrationEvents;
+using foll_care.Care.Application.OutboundServices;
 using foll_care.Care.Domain.Model.Commands;
 using foll_care.Care.Domain.Model.Entities;
 using foll_care.Care.Domain.Repositories;
@@ -12,17 +14,19 @@ public class PatientCommandService : IPatientCommandService
     private readonly IPatientInvitationRepository _invitationRepository;
     private readonly IRelationshipTypeRepository _relationshipTypeRepository;
     private readonly IUnitOfWork _unitOfWork;
+    private readonly ICareEventService _careEventService;
 
     public PatientCommandService(
         IPatientRepository patientRepository,
         IPatientInvitationRepository invitationRepository,
         IRelationshipTypeRepository relationshipTypeRepository,
-        IUnitOfWork unitOfWork)
+        IUnitOfWork unitOfWork, ICareEventService careEventService)
     {
         _patientRepository = patientRepository;
         _invitationRepository = invitationRepository;
         _relationshipTypeRepository = relationshipTypeRepository;
         _unitOfWork = unitOfWork;
+        _careEventService = careEventService;
     }
 
     public async Task<long> Handle(CreatePatientCommand command)
@@ -135,8 +139,13 @@ public class PatientCommandService : IPatientCommandService
             throw new InvalidOperationException("No puedes enviar una invitación a un paciente que ya está vinculado a tu usuario.");
 
         var invitation = new PatientInvitation(patient.PatientId, command.ActorUserId, command.RelationshipTypeId, command.ExpiresAt);
-        await _invitationRepository.AddAsync(invitation);
-        await _unitOfWork.CompleteAsync();
+        await _unitOfWork.ExecuteInTransactionAsync(async () =>
+        {
+            await _invitationRepository.AddAsync(invitation);
+            await _unitOfWork.CompleteAsync(); // Obtain the database-generated invitation ID.
+            await StageInvitationEventAsync("created", invitation, patient);
+            await _unitOfWork.CompleteAsync();
+        });
 
         return invitation.PatientInvitationId;
     }
@@ -157,6 +166,7 @@ public class PatientCommandService : IPatientCommandService
 
         _invitationRepository.Update(invitation);
         _patientRepository.Update(patient);
+        await StageInvitationEventAsync("accepted", invitation, patient);
         await _unitOfWork.CompleteAsync();
     }
 
@@ -173,7 +183,31 @@ public class PatientCommandService : IPatientCommandService
 
         invitation.Reject();
         _invitationRepository.Update(invitation);
+        await StageInvitationEventAsync("rejected", invitation, patient);
         await _unitOfWork.CompleteAsync();
+    }
+
+    public async Task Handle(DeletePatientCommand command)
+    {
+        var patient = await _patientRepository.FindByIdAsync(command.PatientId);
+        if (patient is null) throw new InvalidOperationException("Paciente no encontrado.");
+
+        if (patient.OfficialGuardianUserId != command.UserId)
+            throw new UnauthorizedAccessException("Solo el OficialGuardian puede eliminar al paciente.");
+
+        _patientRepository.Remove(patient);
+        await _unitOfWork.CompleteAsync();
+    }
+
+    private async Task StageInvitationEventAsync(string kind, PatientInvitation invitation, Patient patient)
+    {
+        var relationship = await _relationshipTypeRepository.FindByIdAsync(invitation.RelationshipTypeId);
+        await _careEventService.InvitationChangedAsync(new InvitationChangedIntegrationEvent(
+            Guid.NewGuid(), Guid.NewGuid(), invitation.PatientInvitationId, patient.PatientId,
+            $"{patient.FirstName} {patient.LastName}".Trim(),
+            kind == "created" ? patient.OfficialGuardianUserId : invitation.InvitingUserId,
+            invitation.InvitingUserId, invitation.RelationshipTypeId, relationship?.Name ?? "Cuidador",
+            invitation.Status.ToString(), invitation.ExpiresAt, kind, DateTime.UtcNow));
     }
 
     private static void EnsureUserLinkedToPatient(Patient patient, long actorUserId)

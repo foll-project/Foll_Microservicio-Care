@@ -10,4 +10,10 @@ public class UnitOfWork : IUnitOfWork
     public UnitOfWork(AppDbContext context) => _context = context;
 
     public async Task CompleteAsync() => await _context.SaveChangesAsync();
+    public async Task ExecuteInTransactionAsync(Func<Task> action)
+    {
+        await using var transaction = await _context.Database.BeginTransactionAsync();
+        await action();
+        await transaction.CommitAsync();
+    }
 }

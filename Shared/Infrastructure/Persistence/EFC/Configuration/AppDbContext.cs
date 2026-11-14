@@ -11,6 +11,8 @@ public class AppDbContext : DbContext
     }
 
 
+    public DbSet<foll_care.Care.Infrastructure.Messaging.Outbox.IntegrationOutboxMessage> IntegrationOutboxMessages { get; set; }
+
     public DbSet<Patient> Patients { get; set; }
     public DbSet<PatientInvitation> PatientInvitations { get; set; }
     public DbSet<EmergencyContact> EmergencyContacts { get; set; }

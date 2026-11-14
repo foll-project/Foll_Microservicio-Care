@@ -1,3 +1,4 @@
+using foll_care.Care.Infrastructure.Gateways;
 // ACL layer removed: endpoints moved to internal controllers
 using System.Text;
 using foll_care.Care.Application.Internal.CommandServices;
@@ -27,6 +28,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         .UseSnakeCaseNamingConvention();
 });
 
+builder.Services.AddMediatR(cfg => cfg.RegisterServicesFromAssembly(typeof(Program).Assembly));
+
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 
@@ -55,6 +58,12 @@ builder.Services.AddSwaggerGen(options =>
 
 builder.Services.AddHttpContextAccessor();
 
+
+builder.Services.AddHttpClient<IDeviceStatusGateway, DeviceStatusGateway>(client =>
+{
+    client.BaseAddress = new Uri(
+        builder.Configuration["Services:DeviceManagment:BaseUrl"]!);
+});
 
 // ================== MICROSERVICIO IAM
 
@@ -108,6 +117,14 @@ builder.Services.AddScoped<IRelationshipTypeRepository, RelationshipTypeReposito
 builder.Services.AddScoped<IPatientCommandService, PatientCommandService>();
 builder.Services.AddScoped<IPatientQueryService, PatientQueryService>();
 builder.Services.AddScoped<IRelationshipTypeQueryService, RelationshipTypeQueryService>();
+
+builder.Services.AddScoped<ICareEventService, foll_care.Care.Infrastructure.Messaging.Outbox.OutboxCareEventService>();
+builder.Services.AddOptions<foll_care.Care.Infrastructure.Messaging.Configuration.IntegrationMessagingOptions>()
+    .Bind(builder.Configuration.GetSection("IntegrationMessaging"))
+    .Validate(o => o.PollIntervalSeconds > 0 && o.BatchSize > 0 && o.BatchSize <= 100,
+        "PollIntervalSeconds debe ser positivo y BatchSize debe estar entre 1 y 100.")
+    .ValidateOnStart();
+builder.Services.AddHostedService<foll_care.Care.Infrastructure.Messaging.Outbox.OutboxPublisherBackgroundService>();
 
 var app = builder.Build();
 

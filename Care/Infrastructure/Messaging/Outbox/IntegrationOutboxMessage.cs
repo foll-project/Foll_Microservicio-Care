@@ -26,6 +26,14 @@ public class IntegrationOutboxMessage
         NextAttemptAtUtc = message.OccurredAtUtc
     };
 
+    public static IntegrationOutboxMessage From(foll_care.Shared.Infrastructure.Messaging.AccountDeletionCompleted message) => new()
+    {
+        EventId = message.EventId, OperationId = message.OperationId,
+        EventType = foll_care.Shared.Infrastructure.Messaging.AccountDeletionCompleted.EventType, Version = message.Version,
+        Payload = JsonSerializer.Serialize(message), OccurredAtUtc = message.OccurredAtUtc,
+        NextAttemptAtUtc = message.OccurredAtUtc
+    };
+
     public void MarkAsPublished(DateTime now)
     {
         AttemptCount++;

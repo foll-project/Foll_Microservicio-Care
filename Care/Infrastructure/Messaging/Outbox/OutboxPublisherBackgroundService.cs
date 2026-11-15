@@ -57,6 +57,17 @@ public class OutboxPublisherBackgroundService(
             {
                 if (message.Version != 1)
                     throw new InvalidOperationException("Contrato de evento no soportado.");
+                if (message.EventType == foll_care.Shared.Infrastructure.Messaging.AccountDeletionCompleted.EventType)
+                {
+                    var completion = JsonSerializer.Deserialize<foll_care.Shared.Infrastructure.Messaging.AccountDeletionCompleted>(message.Payload)
+                        ?? throw new InvalidOperationException("Confirmacion vacia.");
+                    if (completion.EventId != message.EventId || completion.OperationId != message.OperationId || completion.Version != message.Version)
+                        throw new InvalidOperationException("Confirmacion no coincide con el outbox.");
+                    await scope.ServiceProvider.GetRequiredService<foll_care.Care.Infrastructure.Messaging.RabbitMq.RabbitMqIntegrationEventPublisher>()
+                        .PublishCompletionAsync(completion, cancellationToken);
+                    message.MarkAsPublished(DateTime.UtcNow);
+                    continue;
+                }
                 var integrationEvent = JsonSerializer.Deserialize<InvitationChangedIntegrationEvent>(message.Payload)
                     ?? throw new InvalidOperationException("Evento vacio en outbox.");
                 if (integrationEvent.EventType != message.EventType || integrationEvent.EventId != message.EventId ||

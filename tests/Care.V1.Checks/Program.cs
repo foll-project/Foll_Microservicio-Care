@@ -108,7 +108,9 @@ await disabled.StartAsync(default); await disabled.StopAsync(default);
 Check(true, "disabled worker needs no publisher or database");
 using var enabled = new OutboxPublisherBackgroundService(provider.GetRequiredService<IServiceScopeFactory>(), Options.Create(new IntegrationMessagingOptions { Enabled=true }), NullLogger<OutboxPublisherBackgroundService>.Instance);
 await Throws<InvalidOperationException>(() => enabled.StartAsync(default), "enabled worker without transport fails explicitly");
-Console.WriteLine($"{count} checks passed. SQLite transactions tested; no live PostgreSQL or broker used.");
+await NotificationRecipientsChecks.RunAsync(Check);
+if (args.Contains("--rabbitmq")) await RabbitMqChecks.RunAsync(Check);
+Console.WriteLine($"{count} checks passed. SQLite transactions tested; no live PostgreSQL used. RabbitMQ checks: {(args.Contains("--rabbitmq") ? "enabled" : "disabled")}.");
 
 sealed class FailingEvents : ICareEventService {
     public Task InvitationChangedAsync(InvitationChangedIntegrationEvent message) => throw new InvalidOperationException("Simulated outbox failure");

@@ -3,6 +3,7 @@ using foll_care.Care.Domain.Model.Queries;
 using foll_care.Care.Domain.Repositories;
 using foll_care.Care.Domain.Services;
 using foll_care.Care.Domain.Model.ValueObjects;
+using foll_care.Care.Application.Ports;
 
 namespace foll_care.Care.Application.Internal.QueryServices;
 
@@ -11,15 +12,18 @@ public class PatientQueryService : IPatientQueryService
     private readonly IPatientRepository _patientRepository;
     private readonly IPatientInvitationRepository _invitationRepository;
     private readonly IRelationshipTypeRepository _relationshipTypeRepository;
+    private readonly IUserInfoGateway _users;
 
     public PatientQueryService(
         IPatientRepository patientRepository,
         IPatientInvitationRepository invitationRepository,
-        IRelationshipTypeRepository relationshipTypeRepository)
+        IRelationshipTypeRepository relationshipTypeRepository,
+        IUserInfoGateway users)
     {
         _patientRepository = patientRepository;
         _invitationRepository = invitationRepository;
         _relationshipTypeRepository = relationshipTypeRepository;
+        _users = users;
     }
 
     public async Task<Patient?> Handle(GetPatientByIdQuery query)
@@ -159,6 +163,30 @@ public class PatientQueryService : IPatientQueryService
             patient.OfficialGuardianUserId,
             patient.CurrentGuardianUserId,
             patient.Caregivers.Select(c => c.UserId).ToArray());
+    }
+
+    public async Task<PatientNotificationRecipients?> Handle(GetPatientNotificationRecipientsQuery query)
+    {
+        if (query.PatientId <= 0) return null;
+        var patient = await _patientRepository.FindByIdAsync(query.PatientId);
+        if (patient is null) return null;
+        var caregiverIds = patient.Caregivers.Select(c => c.UserId).Where(id => id > 0).ToHashSet();
+        var recipientIds = new HashSet<long>(caregiverIds);
+        if (patient.OfficialGuardianUserId > 0) recipientIds.Add(patient.OfficialGuardianUserId);
+        if (patient.CurrentGuardianUserId is > 0 &&
+            (patient.CurrentGuardianUserId == patient.OfficialGuardianUserId || caregiverIds.Contains(patient.CurrentGuardianUserId.Value)))
+            recipientIds.Add(patient.CurrentGuardianUserId.Value);
+        var recipients = new List<PatientNotificationUserRecipient>();
+        foreach (var id in recipientIds)
+        {
+            var user = await _users.FindByIdAsync(id);
+            var name = user is null ? "" : $"{user.FirstName} {user.LastName}".Trim();
+            recipients.Add(new(id, string.IsNullOrWhiteSpace(name) ? $"Usuario {id}" : name, user?.PhoneNumber));
+        }
+        return new(patient.PatientId, recipients, patient.EmergencyContacts
+            .Where(contact => !string.IsNullOrWhiteSpace(contact.PhoneNumber))
+            .Select(contact => new PatientNotificationEmergencyContact(contact.EmergencyContactId,
+                contact.FullName, contact.PhoneNumber, contact.Relationship)).ToArray());
     }
 
     private static void EnsureUserLinkedToPatient(Patient patient, long actorUserId)

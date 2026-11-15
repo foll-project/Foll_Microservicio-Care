@@ -1,6 +1,8 @@
+> Actualizacion: NotificationCommunication ya consume las invitaciones y Care consume solicitudes de eliminacion de IAM. Consultar [consumidores y pruebas](rabbitmq-consumers.md). Los limites V1 descritos abajo corresponden a la etapa anterior.
+
 # Eventos de invitaciones — V1
 
-Esta versión sigue el alcance de IAM V1: registra eventos de integración en un outbox transaccional y prepara su publicación mediante un puerto de Application. No incluye conexión a RabbitMQ, consumidores, inbox ni eliminación de pacientes por solicitudes de IAM. No envía aún avisos reales a NotificationCommunication o al frontend.
+Esta versión registra eventos de integración en un outbox transaccional y los publica en RabbitMQ mediante el adaptador registrado de IIntegrationEventPublisher. No incluye consumidores, inbox ni eliminación de pacientes por solicitudes de IAM. Los mensajes quedan en una cola durable; el aviso al frontend requiere el futuro consumidor de NotificationCommunication.
 
 ## Funcionalidades
 
@@ -14,7 +16,7 @@ Las rutas, respuestas y reglas existentes se conservan. Repetir una aceptación 
 
 - `Care/Application/IntegrationEvents/InvitationChangedIntegrationEvent.cs`: contrato JSON común para las tres variantes y sus tipos estables.
 - `Care/Application/OutboundServices/ICareEventService.cs`: puerto para registrar eventos de invitaciones.
-- `Care/Application/OutboundServices/IIntegrationEventPublisher.cs`: puerto de publicación al futuro transporte.
+- `Care/Application/OutboundServices/IIntegrationEventPublisher.cs`: puerto de publicación al transporte.
 - `Care/Application/Internal/CommandServices/PatientCommandService.cs`: registra el evento como parte de la operación.
 - `Care/Infrastructure/Messaging/Configuration/IntegrationMessagingOptions.cs`: activación, intervalo y tamaño de lote.
 - `Care/Infrastructure/Messaging/Outbox/IntegrationOutboxMessage.cs`: persistencia del evento y sus intentos.
@@ -27,11 +29,11 @@ Las rutas, respuestas y reglas existentes se conservan. Repetir una aceptación 
 - `Program.cs` y `appsettings.json`: DI y opciones.
 - `tests/Care.V1.Checks`: comprobaciones ejecutables.
 
-Domain conserva las reglas de las invitaciones. Interfaces conserva sus endpoints; no necesita clases nuevas en esta etapa porque no se reciben mensajes. No se crean carpetas RabbitMq ni Inbox todavía.
+Domain conserva las reglas de las invitaciones. Interfaces conserva sus endpoints; no necesita clases nuevas en esta etapa porque no se reciben mensajes. El adaptador concreto está en Infrastructure/Messaging/RabbitMq. No se crea Inbox porque todavía no se reciben mensajes.
 
 ## Contrato para el futuro broker
 
-La serialización es JSON con nombres PascalCase, igual que IAM V1. Los tres tipos usan `InvitationChangedIntegrationEvent` con `Kind` igual a `created`, `accepted` o `rejected`. El tipo estable se guarda en `EventType` del outbox y deberá enviarse como metadato/tipo o routing key por el adaptador. La propiedad calculada `EventType` no se duplica en el payload.
+La serialización es JSON con nombres PascalCase, igual que IAM V1. Los tres tipos usan `InvitationChangedIntegrationEvent` con `Kind` igual a `created`, `accepted` o `rejected`. El tipo estable se guarda en `EventType` del outbox y se envía como metadato Type y routing key por el adaptador. La propiedad calculada `EventType` no se duplica en el payload.
 
 Campos: `EventId`, `OperationId`, `InvitationId`, `PatientId`, `PatientName`, `TargetUserId`, `RequesterUserId`, `RelationshipTypeId`, `RelationshipName`, `Status`, `ExpiresAt`, `Kind`, `OccurredAtUtc`, `Version` (1).
 
@@ -49,11 +51,11 @@ El outbox no tiene FK hacia la invitación: una eliminación posterior no borra 
 
 ## Activación y publicación
 
-`IntegrationMessaging:Enabled` es `false` por defecto, `PollIntervalSeconds` es 5 y `BatchSize` es 20. Intervalo positivo y lotes entre 1 y 100 se validan al iniciar.
+`IntegrationMessaging:Enabled` está configurado en `true` para el broker local, `PollIntervalSeconds` es 5 y `BatchSize` es 20. Intervalo positivo y lotes entre 1 y 100 se validan al iniciar.
 
-Sin adaptador, mantener deshabilitado. Habilitar sin registrar IIntegrationEventPublisher hace fallar el inicio explícitamente. Deshabilitado, el worker no accede a la base ni marca eventos como enviados.
+El adaptador RabbitMqIntegrationEventPublisher está registrado en DI. Puede deshabilitarse IntegrationMessaging para conservar mensajes pendientes sin publicarlos. Deshabilitado, el worker no accede a la base ni marca eventos como enviados.
 
-El futuro adaptador deberá completar PublishAsync solo después de aceptación durable del transporte; respetar cancelación y timeout finito; preservar identificadores; y lanzar excepción ante fallo o resultado incierto. Para RabbitMQ se requieren publisher confirms, mensajes persistentes, topología durable y detección de publicaciones sin ruta.
+El adaptador completa PublishAsync después de publisher confirms; usa mensajes persistentes, topología durable, mandatory para detectar mensajes sin ruta y timeout finito. Conserva identificadores y lanza excepción ante fallo o resultado incierto. Véase rabbitmq-publication.md para topología y pruebas.
 
 El worker usa PostgreSQL `FOR UPDATE SKIP LOCKED` para reclamar lotes entre réplicas. Registra fallos con espera exponencial hasta 300 segundos; solo marca PublishedAtUtc tras confirmación. Mantiene la transacción del lote durante la publicación, igual que IAM V1: usar lotes pequeños y timeout acotado en el adaptador.
 
@@ -69,4 +71,4 @@ Ejecutar desde la raíz del microservicio:
 dotnet run --project tests/Care.V1.Checks/Care.V1.Checks.csproj
 ```
 
-Las comprobaciones usan repositorios, servicio, UnitOfWork y outbox reales con SQLite en memoria para probar commit y rollback. Verifican reglas, destinatarios, contratos, eventos pendientes, reintentos, configuración de EF, generación del SQL de migración PostgreSQL y activación del worker. No se conectan a PostgreSQL ni al broker; aún faltan pruebas del transporte real y de concurrencia PostgreSQL cuando se integre.
+Las comprobaciones usan repositorios, servicio, UnitOfWork y outbox reales con SQLite en memoria para probar commit y rollback. Verifican reglas, destinatarios, contratos, eventos pendientes, reintentos, configuración de EF, generación del SQL de migración PostgreSQL y activación del worker. Sin argumentos no se conectan a PostgreSQL ni al broker. Con --rabbitmq agregan pruebas reales del transporte en recursos aislados que se eliminan al terminar; no consumen mensajes de negocio. Las pruebas de concurrencia PostgreSQL siguen pendientes.
